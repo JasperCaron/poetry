@@ -1,13 +1,28 @@
 import os
+import pytest
 import shutil
 import sys
 import tomlkit
 from clikit.io import NullIO
 from poetry.semver import Version
+
 from poetry.utils._compat import Path
 from poetry.utils.env import EnvManager
+from poetry.utils.env import EnvCommandError
 from poetry.utils.env import VirtualEnv
 from poetry.utils.toml_file import TomlFile
+
+MINIMAL_SCRIPT = """\
+
+print("Minimal Output"),
+"""
+
+# Script expected to fail.
+ERRORING_SCRIPT = """\
+import nullpackage
+
+print("nullpackage loaded"),
+"""
 
 
 def test_virtualenvs_with_spaces_in_their_path_work_as_expected(tmp_dir, config):
@@ -29,6 +44,8 @@ def test_env_get_in_project_venv(tmp_dir, config):
     venv = EnvManager(config).get(Path(tmp_dir))
 
     assert venv.path == Path(tmp_dir) / ".venv"
+
+    shutil.rmtree(str(venv.path))
 
 
 CWD = Path(__file__).parent.parent / "fixtures" / "simple_project"
@@ -62,9 +79,12 @@ def test_activate_activates_non_existing_virtualenv_no_envs_file(
 
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
     mocker.patch(
-        "subprocess.Popen.communicate",
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
+    mocker.patch(
+        "poetry.utils._compat.subprocess.Popen.communicate",
         side_effect=[("/prefix", None), ("/prefix", None)],
     )
     m = mocker.patch("poetry.utils.env.EnvManager.build_venv", side_effect=build_venv)
@@ -96,8 +116,14 @@ def test_activate_activates_existing_virtualenv_no_envs_file(tmp_dir, config, mo
 
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
-    mocker.patch("subprocess.Popen.communicate", side_effect=[("/prefix", None)])
+    mocker.patch(
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
+    mocker.patch(
+        "poetry.utils._compat.subprocess.Popen.communicate",
+        side_effect=[("/prefix", None)],
+    )
     m = mocker.patch("poetry.utils.env.EnvManager.build_venv", side_effect=build_venv)
 
     env = EnvManager(config).activate("python3.7", CWD, NullIO())
@@ -129,8 +155,14 @@ def test_activate_activates_same_virtualenv_with_envs_file(tmp_dir, config, mock
 
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
-    mocker.patch("subprocess.Popen.communicate", side_effect=[("/prefix", None)])
+    mocker.patch(
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
+    mocker.patch(
+        "poetry.utils._compat.subprocess.Popen.communicate",
+        side_effect=[("/prefix", None)],
+    )
     m = mocker.patch("poetry.utils.env.EnvManager.create_venv")
 
     env = EnvManager(config).activate("python3.7", CWD, NullIO())
@@ -163,11 +195,11 @@ def test_activate_activates_different_virtualenv_with_envs_file(
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
     mocker.patch(
-        "subprocess.check_output",
+        "poetry.utils._compat.subprocess.check_output",
         side_effect=check_output_wrapper(Version.parse("3.6.6")),
     )
     mocker.patch(
-        "subprocess.Popen.communicate",
+        "poetry.utils._compat.subprocess.Popen.communicate",
         side_effect=[("/prefix", None), ("/prefix", None), ("/prefix", None)],
     )
     m = mocker.patch("poetry.utils.env.EnvManager.build_venv", side_effect=build_venv)
@@ -201,9 +233,12 @@ def test_activate_activates_recreates_for_different_patch(tmp_dir, config, mocke
 
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
     mocker.patch(
-        "subprocess.Popen.communicate",
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
+    mocker.patch(
+        "poetry.utils._compat.subprocess.Popen.communicate",
         side_effect=[
             ("/prefix", None),
             ('{"version_info": [3, 7, 0]}', None),
@@ -254,11 +289,11 @@ def test_activate_does_not_recreate_when_switching_minor(tmp_dir, config, mocker
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
     mocker.patch(
-        "subprocess.check_output",
+        "poetry.utils._compat.subprocess.check_output",
         side_effect=check_output_wrapper(Version.parse("3.6.6")),
     )
     mocker.patch(
-        "subprocess.Popen.communicate",
+        "poetry.utils._compat.subprocess.Popen.communicate",
         side_effect=[("/prefix", None), ("/prefix", None), ("/prefix", None)],
     )
     build_venv_m = mocker.patch(
@@ -296,7 +331,10 @@ def test_deactivate_non_activated_but_existing(tmp_dir, config, mocker):
 
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
+    mocker.patch(
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
 
     EnvManager(config).deactivate(CWD, NullIO())
     env = EnvManager(config).get(CWD)
@@ -332,7 +370,10 @@ def test_deactivate_activated(tmp_dir, config, mocker):
 
     config.add_property("settings.virtualenvs.path", str(tmp_dir))
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
+    mocker.patch(
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
 
     EnvManager(config).deactivate(CWD, NullIO())
     env = EnvManager(config).get(CWD)
@@ -361,8 +402,14 @@ def test_get_prefers_explicitly_activated_virtualenvs_over_env_var(
     doc[venv_name] = {"minor": "3.7", "patch": "3.7.0"}
     envs_file.write(doc)
 
-    mocker.patch("subprocess.check_output", side_effect=check_output_wrapper())
-    mocker.patch("subprocess.Popen.communicate", side_effect=[("/prefix", None)])
+    mocker.patch(
+        "poetry.utils._compat.subprocess.check_output",
+        side_effect=check_output_wrapper(),
+    )
+    mocker.patch(
+        "poetry.utils._compat.subprocess.Popen.communicate",
+        side_effect=[("/prefix", None)],
+    )
 
     env = EnvManager(config).get(CWD)
 
@@ -392,7 +439,7 @@ def test_remove_by_python_version(tmp_dir, config, mocker):
     (Path(tmp_dir) / "{}-py3.6".format(venv_name)).mkdir()
 
     mocker.patch(
-        "subprocess.check_output",
+        "poetry.utils._compat.subprocess.check_output",
         side_effect=check_output_wrapper(Version.parse("3.6.6")),
     )
 
@@ -412,7 +459,7 @@ def test_remove_by_name(tmp_dir, config, mocker):
     (Path(tmp_dir) / "{}-py3.6".format(venv_name)).mkdir()
 
     mocker.patch(
-        "subprocess.check_output",
+        "poetry.utils._compat.subprocess.check_output",
         side_effect=check_output_wrapper(Version.parse("3.6.6")),
     )
 
@@ -432,7 +479,7 @@ def test_remove_also_deactivates(tmp_dir, config, mocker):
     (Path(tmp_dir) / "{}-py3.6".format(venv_name)).mkdir()
 
     mocker.patch(
-        "subprocess.check_output",
+        "poetry.utils._compat.subprocess.check_output",
         side_effect=check_output_wrapper(Version.parse("3.6.6")),
     )
 
@@ -452,13 +499,19 @@ def test_remove_also_deactivates(tmp_dir, config, mocker):
     assert venv_name not in envs
 
 
-def test_env_has_symlinks_on_nix(tmp_dir, config):
-    venv_path = Path(tmp_dir)
+@pytest.fixture
+def tmp_venv(tmp_dir, config, request):
+    venv_path = Path(tmp_dir) / "venv"
 
     EnvManager(config).build_venv(str(venv_path))
 
     venv = VirtualEnv(venv_path)
+    yield venv
 
+    shutil.rmtree(str(venv.path))
+
+
+def test_env_has_symlinks_on_nix(tmp_dir, tmp_venv):
     venv_available = False
     try:
         from venv import EnvBuilder
@@ -468,4 +521,20 @@ def test_env_has_symlinks_on_nix(tmp_dir, config):
         pass
 
     if os.name != "nt" and venv_available:
-        assert os.path.islink(venv.python)
+        assert os.path.islink(tmp_venv.python)
+
+
+def test_run_with_input(tmp_dir, tmp_venv):
+    result = tmp_venv.run("python", "-", input_=MINIMAL_SCRIPT)
+
+    assert result == "Minimal Output" + os.linesep
+
+
+def test_run_with_input_non_zero_return(tmp_dir, tmp_venv):
+
+    with pytest.raises(EnvCommandError) as processError:
+
+        # Test command that will return non-zero returncode.
+        result = tmp_venv.run("python", "-", input_=ERRORING_SCRIPT)
+
+    assert processError.value.e.returncode == 1
